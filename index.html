@@ -3,169 +3,268 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>ZAIN.NET Crypto Futures – LONG/SHORT Scanner</title>
+<title>ZAIN.NET Crypto Futures – LONG/SHORT (Client-only, Improved)</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-  body { background:#111; color:#eee; font-family:Arial, sans-serif; margin:0; padding:0; }
-  h2 { padding:10px; text-align:center; background:#222; margin:0; }
-  #chart { height:500px; }
-  #signals { padding:10px; max-height:200px; overflow:auto; background:#000; font-size:14px; }
-  #signals p { margin:4px 0; }
+:root{--bg:#071024;--card:#0f1724;--muted:#9fb0c8;--text:#e6f2ff;--accent:#22c55e;--danger:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Roboto,Helvetica,Arial}
+.wrap{max-width:1200px;margin:14px auto;padding:12px}
+header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:18px;margin:0}
+.controls{display:grid;grid-template-columns:repeat(12,1fr);gap:8px;width:100%}
+.c{grid-column:auto/span 3}
+@media(max-width:900px){.c{grid-column:auto/span 6}}
+@media(max-width:600px){.c{grid-column:auto/span 12}}
+input,select,button{width:100%;padding:8px;border-radius:8px;border:1px solid #21324a;background:#071822;color:var(--text)}
+button{cursor:pointer}
+button.primary{background:linear-gradient(180deg,#0b6b4f,#0a5a42);border:none;color:#e9fff1}
+.grid{display:grid;grid-template-columns:1fr 420px;gap:12px}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:12px;padding:12px;border:1px solid #122033}
+#chart{height:360px}
+.list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}
+@media(max-width:980px){.list{grid-template-columns:1fr}}
+.coin{padding:10px;border-radius:10px;border:1px solid #17283a;background:linear-gradient(180deg,#071422,#081826);display:flex;flex-direction:column;gap:8px}
+.pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px}
+.pill.long{background:#063;color:#bfffe0}
+.pill.short{background:#600;color:#ffdede}
+.pill.neutral{background:#30343a;color:#cbd5e1}
+.muted{color:var(--muted);font-size:13px}
+.small{font-size:12px;color:#9fb0c8}
+.kpi{display:flex;gap:8px;flex-wrap:wrap}
+.kpi .box{background:#071826;padding:8px;border-radius:8px;border:1px solid #123045}
+.history{max-height:240px;overflow:auto;font-size:13px;white-space:pre-wrap}
+.footer{margin-top:12px;color:var(--muted);font-size:13px;text-align:center}
+button.small{padding:6px 8px;font-size:13px}
+.warn{color:#ffcf66}
+.signal-desc{font-size:12px;color:#a0c0ff;margin-top:2px}
+.toggle-box{display:flex;gap:6px;flex-wrap:wrap;font-size:12px}
+.toggle-box label{display:flex;align-items:center;gap:4px}
 </style>
 </head>
 <body>
-  <h2>Crypto Futures Scanner</h2>
-  <div id="chart"></div>
-  <div id="signals"></div>
+<div class="wrap">
+<header>
+<h1>ZAIN.NET Crypto Futures – WA (085231176597)</h1>
+<div class="small muted">Futures USDT-M • EMA/RSI/MACD/BB • Fibonacci • Golden Cross • Chart • History • CORS-hardened</div>
+</header>
+
+<section class="card controls" style="margin-bottom:12px">
+<div class="c"><label>Timeframe<select id="tf"><option>1m</option><option>3m</option><option>5m</option><option>15m</option><option selected>1h</option><option>4h</option><option>1d</option></select></label></div>
+<div class="c"><label>Jumlah candle<input id="limit" type="number" min="50" max="1000" value="300"></label></div>
+<div class="c"><label>Interval (detik)<input id="interval" type="number" min="5" value="60"></label></div>
+<div class="c"><label>Top N USDT<input id="topN" type="number" min="5" max="100" value="30"></label></div>
+<div class="c"><label>Modal (USD)<input id="capital" type="number" value="1000"></label></div>
+<div class="c"><label>Risk (%)<input id="risk" type="number" step="0.1" value="1.0"></label></div>
+<div class="c"><label>Filter<select id="filter"><option value="all">Semua</option><option value="long">LONG</option><option value="short">SHORT</option><option value="neutral">NEUTRAL</option></select></label></div>
+<div class="c"><label>Sort<select id="sort"><option value="volume">Volume</option><option value="change">%Change</option><option value="score">Score</option><option value="symbol">Symbol</option></select></label></div>
+<div class="c"><label>Search<input id="search" placeholder="BTC, ETH..." /></label></div>
+<div class="c"><label>Concurrency<input id="concurrency" type="number" min="1" max="12" value="6"></label></div>
+
+<!-- Toggle indikator -->
+<div class="c" style="grid-column:span 12">
+  <div class="toggle-box">
+    <label><input type="checkbox" id="useEMA" checked>EMA</label>
+    <label><input type="checkbox" id="useRSI" checked>RSI</label>
+    <label><input type="checkbox" id="useMACD" checked>MACD</label>
+    <label><input type="checkbox" id="useBB" checked>BB</label>
+    <label><input type="checkbox" id="useFIB" checked>Fibonacci</label>
+  </div>
+</div>
+
+<div class="c"><button class="primary" id="startBtn">Start Scan</button></div>
+<div class="c"><button id="stopBtn">Stop</button></div>
+<div class="c"><button id="exportCSV">Export CSV</button></div>
+<div class="c"><button id="exportJSON">Export JSON</button></div>
+</section>
+
+<div class="grid">
+<div>
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div class="kpi" id="kpis"></div>
+<div><span class="small muted">Status: </span><span id="status" class="small">Idle</span></div>
+</div>
+<div id="warn" class="small warn" style="margin-top:6px"></div>
+<div id="list" class="list" style="margin-top:12px"></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+<h3>History (localStorage)</h3>
+<div style="display:flex;gap:8px;margin-bottom:8px">
+<button id="clearHistory" class="small">Clear History</button>
+<button id="downloadHistory" class="small">Download JSON</button>
+</div>
+<div id="history" class="history muted"></div>
+</div>
+</div>
+
+<div>
+<div class="card">
+<h3>Chart</h3>
+<div id="chart"></div>
+<div id="chartInfo" class="small muted" style="margin-top:8px"></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+<h3>Logs</h3>
+<div id="log" class="small muted" style="max-height:160px;overflow:auto"></div>
+</div>
+</div>
+</div>
+
+<div class="footer">DYOR. Ini hanya analisa otomatis yang bisa saja salah. Analisa manual lagi untuk validasi data.</div>
+</div>
 
 <script>
-// === SETUP CHART ===
-const chart = LightweightCharts.createChart(document.getElementById('chart'), {
-    layout: { background: { color: '#111' }, textColor: '#eee' },
-    grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } },
-    rightPriceScale: { borderColor: '#555' },
-    timeScale: { borderColor: '#555' }
-});
-const candleSeries = chart.addCandlestickSeries();
-const ema50Series = chart.addLineSeries({ color: 'yellow' });
-const ema200Series = chart.addLineSeries({ color: 'red' });
-const lineSupport = chart.addLineSeries({ color: 'green', lineWidth: 1, lineStyle: 2 });
-const lineResistance = chart.addLineSeries({ color: 'orange', lineWidth: 1, lineStyle: 2 });
+// ======== UTILITIES ========
+const DOM=s=>document.querySelector(s);
+const fmt=(n,d=2)=>Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+const PROXY='https://api.allorigins.win/raw?url=';
 
-// === ALARM SOUND ===
-const alarmSound = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-
-// === FETCH DATA BINANCE ===
-async function fetchData(symbol="BTCUSDT", interval="5m", limit=200) {
-    let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    let res = await fetch(url);
-    let data = await res.json();
-    return data.map(d => ({
-        time: d[0]/1000,
-        open: parseFloat(d[1]),
-        high: parseFloat(d[2]),
-        low: parseFloat(d[3]),
-        close: parseFloat(d[4])
-    }));
+// ======== FETCH ========
+async function tryFetch(url,retries=2){
+  const tries=[url, PROXY+encodeURIComponent(url)];
+  let lastErr=null;
+  for(const u of tries){
+    for(let i=0;i<=retries;i++){
+      try{
+        const r=await fetch(u,{cache:'no-store'});
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        const json=await r.json();
+        log(`fetched ${u}`);
+        return json;
+      }catch(e){ lastErr=e; await sleep(400*(i+1)); }
+    }
+  }
+  throw lastErr;
 }
 
-// === CALCULATE EMA ===
-function EMA(data, period) {
-    let k = 2/(period+1);
-    let emaArray = [];
-    let ema = data[0].close;
-    data.forEach((bar,i) => {
-        ema = i===0 ? bar.close : bar.close*k + ema*(1-k);
-        emaArray.push({ time: bar.time, value: ema });
-    });
-    return emaArray;
+// ======== INDICATORS ========
+function SMA(data,p){const out=[];let s=0;for(let i=0;i<data.length;i++){s+=data[i];if(i>=p)s-=data[i-p];out.push(i>=p-1?s/p:null);}return out;}
+function EMA(data,p){const out=[];const k=2/(p+1);let prev=null;for(let i=0;i<data.length;i++){prev=prev===null?data[i]:(data[i]-prev)*k+prev;out.push(prev);}return out;}
+function RSI(closes,p=14){const out=Array(closes.length).fill(null);let g=0,l=0;for(let i=1;i<closes.length;i++){const d=closes[i]-closes[i-1];const gg=Math.max(d,0),ll=Math.max(-d,0);if(i<=p){g+=gg;l+=ll;if(i===p){const rs=g/Math.max(l,1e-9);out[i]=100-100/(1+rs);}}else{g=(g*(p-1)+gg)/p;l=(l*(p-1)+ll)/p;const rs=g/Math.max(l,1e-9);out[i]=100-100/(1+rs);}}return out;}
+function MACD(closes,f=12,s=26,sig=9){const emaF=EMA(closes,f),emaS=EMA(closes,s);const macd=emaF.map((v,i)=>v-emaS[i]);const sigLine=EMA(macd,sig);return {macd,sig:sigLine,hist:macd.map((v,i)=>v-sigLine[i])};}
+function BB(closes,p=20,mul=2){const sma=SMA(closes,p);return closes.map((c,i)=>{if(i<p-1)return null;const sd=Math.sqrt(closes.slice(i-p+1,i+1).reduce((a,b)=>a+(b-sma[i])**2,0)/p);return {upper:sma[i]+mul*sd,mid:sma[i],lower:sma[i]-mul*sd};});}
+
+// ======== CHART ========
+let chart=null, series=null, ema50Series=null, ema200Series=null, bbUpper=null, bbLower=null;
+function initChart(){
+  if(chart) return;
+  chart=LightweightCharts.createChart(DOM('#chart'),{width:400,height:360,rightPriceScale:{borderVisible:false},timeScale:{borderVisible:false}});
+  series=chart.addCandlestickSeries();
 }
 
-// === CALCULATE RSI ===
-function RSI(data, period=14) {
-    let gains=0, losses=0, rsi=[{time:data[0].time,value:50}];
-    for(let i=1;i<data.length;i++){
-        let change = data[i].close - data[i-1].close;
-        gains += Math.max(0,change);
-        losses += Math.max(0,-change);
-        if(i>=period){
-            let avgGain = gains/period;
-            let avgLoss = losses/period;
-            let rs = avgLoss===0 ? 100 : avgGain/avgLoss;
-            let val = 100-(100/(1+rs));
-            rsi.push({time:data[i].time,value:val});
-            gains -= Math.max(0,data[i-period+1].close - data[i-period].close);
-            losses -= Math.max(0,data[i-period].close - data[i-period+1].close);
-        }
-    }
-    return rsi;
+// ======== HISTORY ========
+DOM('#clearHistory').onclick=()=>{localStorage.removeItem('zain_history');renderHistory();};
+DOM('#downloadHistory').onclick=()=>{
+  const data=localStorage.getItem('zain_history')||'[]';
+  const blob=new Blob([data],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='history.json'; a.click();
+};
+function saveHistory(results){
+  const hist=JSON.parse(localStorage.getItem('zain_history')||'[]');
+  hist.push({time:new Date().toISOString(),results}); localStorage.setItem('zain_history',JSON.stringify(hist)); renderHistory();
+}
+function renderHistory(){
+  const hist=JSON.parse(localStorage.getItem('zain_history')||'[]');
+  DOM('#history').innerText=JSON.stringify(hist,null,2);
 }
 
-// === ADD MARKER TO CHART & SIGNAL PANEL ===
-function addMarker(text, type, time){
-    candleSeries.setMarkers([{ 
-        time: time, 
-        position: type==='long'?'belowBar':'aboveBar',
-        color: type==='long'?'green':'red',
-        shape: type==='long'?'arrowUp':'arrowDown',
-        text: text
-    }]);
-    let div = document.getElementById("signals");
-    div.innerHTML = `<p>${new Date(time*1000).toLocaleTimeString()} - ${text}</p>` + div.innerHTML;
+// ======== LOG ========
+function log(msg){const l=DOM('#log');l.innerText+=msg+'\n';l.scrollTop=l.scrollHeight;}
+
+// ======== SCANNER ========
+let intervalId=null;
+DOM('#startBtn').onclick=startScan;
+DOM('#stopBtn').onclick=()=>{clearInterval(intervalId);DOM('#status').innerText='Stopped';};
+
+async function startScan(){
+  const tf=DOM('#tf').value, limit=+DOM('#limit').value;
+  const topN=+DOM('#topN').value, capital=+DOM('#capital').value, risk=+DOM('#risk').value;
+  const useEMA=DOM('#useEMA').checked, useRSI=DOM('#useRSI').checked, useMACD=DOM('#useMACD').checked, useBB=DOM('#useBB').checked, useFIB=DOM('#useFIB').checked;
+  DOM('#status').innerText='Scanning...'; log('Start scan');
+  const tickers=await tryFetch('https://fapi.binance.com/fapi/v1/ticker/24hr');
+  const coins=tickers.sort((a,b)=>+b.quoteVolume-+a.quoteVolume).slice(0,topN);
+  const results=[]; initChart();
+  
+  for(const c of coins){
+    const symbol=c.symbol;
+    const klines=await tryFetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${tf}&limit=${limit}`);
+    const closes=klines.map(k=>+k[4]);
+    const ema50=EMA(closes,50), ema200=EMA(closes,200);
+    const rsi=RSI(closes), macd=MACD(closes), bb=BB(closes);
+    const lastPrice=closes[closes.length-1];
+    let long=false, short=false, reason='';
+
+    if(useEMA){
+      if(ema50[ema50.length-2]<ema200[ema200.length-2] && ema50[ema50.length-1]>ema200[ema200.length-1]){long=true; reason+='Golden Cross; ';}
+      if(ema50[ema50.length-2]>ema200[ema200.length-2] && ema50[ema50.length-1]<ema200[ema200.length-1]){short=true; reason+='Death Cross; ';}
+    }
+    if(useRSI){
+      if(rsi[rsi.length-1]<30){long=true; reason+='RSI oversold; ';}
+      if(rsi[rsi.length-1]>70){short=true; reason+='RSI overbought; ';}
+    }
+    if(useMACD){
+      if(macd.macd[macd.macd.length-1]-macd.sig[macd.sig.length-1]>0){long=true; reason+='MACD bullish; ';}
+      if(macd.macd[macd.macd.length-1]-macd.sig[macd.sig.length-1]<0){short=true; reason+='MACD bearish; ';}
+    }
+
+    const fibLevels=useFIB?[0,0.236,0.382,0.5,0.618,0.786,1].map(f=>Math.min(...closes.slice(-50))+(Math.max(...closes.slice(-50))-Math.min(...closes.slice(-50)))*f):[];
+
+    const stopLoss=long?lastPrice*0.98:lastPrice*1.02;
+    const tp1=long?lastPrice*1.02:lastPrice*0.98;
+    const tp2=long?lastPrice*1.04:lastPrice*0.96;
+    const tp3=long?lastPrice*1.06:lastPrice*0.94;
+    const positionSize=(capital*risk/100)/Math.abs(lastPrice-stopLoss);
+
+    results.push({symbol,lastPrice,long,short,score:(long?10:-10),stopLoss,tp1,tp2,tp3,positionSize,reason,fibLevels});
+
+    await sleep(200);
+
+    if(symbol===coins[0].symbol){
+      series.setData(klines.map(k=>({time:k[0]/1000,open:+k[1],high:+k[2],low:+k[3],close:+k[4]})));
+
+      if(useEMA){
+        if(!ema50Series) ema50Series=chart.addLineSeries({color:'yellow'});
+        if(!ema200Series) ema200Series=chart.addLineSeries({color:'orange'});
+        ema50Series.setData(closes.map((c,i)=>({time:klines[i][0]/1000,value:ema50[i]})).filter(x=>x.value));
+        ema200Series.setData(closes.map((c,i)=>({time:klines[i][0]/1000,value:ema200[i]})).filter(x=>x.value));
+      }
+      if(useBB){
+        if(!bbUpper) bbUpper=chart.addLineSeries({color:'cyan'});
+        if(!bbLower) bbLower=chart.addLineSeries({color:'cyan'});
+        bbUpper.setData(bb.map((b,i)=>b?{time:klines[i][0]/1000,value:b.upper}:null).filter(Boolean));
+        bbLower.setData(bb.map((b,i)=>b?{time:klines[i][0]/1000,value:b.lower}:null).filter(Boolean));
+      }
+      if(useFIB){
+        DOM('#chartInfo').innerText=`Chart for ${symbol} | Fibonacci: ${fibLevels.map(f=>fmt(f)).join(', ')}`;
+      } else {
+        DOM('#chartInfo').innerText=`Chart for ${symbol}`;
+      }
+    }
+  }
+  renderResults(results); saveHistory(results); DOM('#status').innerText='Idle';
 }
 
-// === SCAN FUNCTION ===
-async function runScan(){
-    let data = await fetchData("BTCUSDT","5m",200);
-    candleSeries.setData(data);
-
-    let ema50 = EMA(data,50);
-    let ema200 = EMA(data,200);
-    ema50Series.setData(ema50);
-    ema200Series.setData(ema200);
-
-    let rsi = RSI(data,14);
-    let last = data[data.length-1];
-    let time = last.time;
-    let ema50Now = ema50[ema50.length-1].value;
-    let ema200Now = ema200[ema200.length-1].value;
-    let ema50Prev = ema50[ema50.length-2].value;
-    let ema200Prev = ema200[ema200.length-2].value;
-    let rsiNow = rsi[rsi.length-1].value;
-
-    // === Golden Cross/Death Cross ===
-    if(ema50Prev < ema200Prev && ema50Now > ema200Now){
-        addMarker("Golden Cross","long",time);
-        alarmSound.play();
-    }
-    if(ema50Prev > ema200Prev && ema50Now < ema200Now){
-        addMarker("Death Cross","short",time);
-        alarmSound.play();
-    }
-
-    // === Golden Fibonacci ===
-    let swingHigh = Math.max(...data.map(d=>d.high));
-    let swingLow = Math.min(...data.map(d=>d.low));
-    let fibo618 = swingLow + (swingHigh-swingLow)*0.618;
-    let fibo786 = swingLow + (swingHigh-swingLow)*0.786;
-    if(Math.abs(last.close-fibo618)/fibo618 < 0.002){
-        addMarker("Golden Fibonacci 0.618","long",time);
-        alarmSound.play();
-    }
-    if(Math.abs(last.close-fibo786)/fibo786 < 0.002){
-        addMarker("Golden Fibonacci 0.786","long",time);
-        alarmSound.play();
-    }
-
-    // === RSI EXTREME ===
-    if(rsiNow > 80){
-        addMarker("RSI Overbought > 80","short",time);
-        alarmSound.play();
-    }
-    if(rsiNow < 20){
-        addMarker("RSI Oversold < 20","long",time);
-        alarmSound.play();
-    }
-
-    // === Breakout/Breakdown Simple (support/resistance) ===
-    let support = swingLow;
-    let resistance = swingHigh;
-    lineSupport.setData([{time:data[0].time,value:support},{time:last.time,value:support}]);
-    lineResistance.setData([{time:data[0].time,value:resistance},{time:last.time,value:resistance}]);
-    if(last.close > resistance){
-        addMarker("Breakout Resistance","long",time);
-    }
-    if(last.close < support){
-        addMarker("Breakdown Support","short",time);
-    }
+function renderResults(results){
+  const filter=DOM('#filter').value;
+  const list=DOM('#list'); list.innerHTML='';
+  for(const r of results){
+    if(filter!=='all' && ((filter==='long'&&!r.long)||(filter==='short'&&!r.short))) continue;
+    const div=document.createElement('div'); div.className='coin';
+    div.innerHTML=`<div>${r.symbol} <span class="pill ${r.long?'long':r.short?'short':'neutral'}">${r.long?'LONG':r.short?'SHORT':'NEUTRAL'}</span></div>
+    <div>Price: ${fmt(r.lastPrice)}</div>
+    <div>SL: ${fmt(r.stopLoss)}, TP1: ${fmt(r.tp1)}, TP2: ${fmt(r.tp2)}, TP3: ${fmt(r.tp3)}</div>
+    <div>Size: ${fmt(r.positionSize)}</div>
+    <div class="signal-desc">${r.reason}</div>
+    ${r.fibLevels.length?`<div class="signal-desc">Fibonacci: ${r.fibLevels.map(f=>fmt(f)).join(', ')}</div>`:''}`;
+    list.appendChild(div);
+  }
 }
-
-// === Jalankan pertama kali ===
-runScan();
-
-// === Auto refresh tiap 5 menit ===
-setInterval(runScan, 5*60*1000);
-
 </script>
 </body>
 </html>
