@@ -6,8 +6,11 @@
 <title>ZAIN.NET Crypto Futures – LONG/SHORT Scanner</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-  body { background:#111; color:#eee; font-family:Arial; }
+  body { background:#111; color:#eee; font-family:Arial, sans-serif; margin:0; padding:0; }
+  h2 { padding:10px; text-align:center; background:#222; margin:0; }
   #chart { height:500px; }
+  #signals { padding:10px; max-height:200px; overflow:auto; background:#000; font-size:14px; }
+  #signals p { margin:4px 0; }
 </style>
 </head>
 <body>
@@ -19,7 +22,9 @@
 // === SETUP CHART ===
 const chart = LightweightCharts.createChart(document.getElementById('chart'), {
     layout: { background: { color: '#111' }, textColor: '#eee' },
-    grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } }
+    grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } },
+    rightPriceScale: { borderColor: '#555' },
+    timeScale: { borderColor: '#555' }
 });
 const candleSeries = chart.addCandlestickSeries();
 const ema50Series = chart.addLineSeries({ color: 'yellow' });
@@ -76,7 +81,7 @@ function RSI(data, period=14) {
     return rsi;
 }
 
-// === ADD MARKER TO CHART ===
+// === ADD MARKER TO CHART & SIGNAL PANEL ===
 function addMarker(text, type, time){
     candleSeries.setMarkers([{ 
         time: time, 
@@ -86,7 +91,7 @@ function addMarker(text, type, time){
         text: text
     }]);
     let div = document.getElementById("signals");
-    div.innerHTML += `<p>${new Date(time*1000).toLocaleTimeString()} - ${text}</p>`;
+    div.innerHTML = `<p>${new Date(time*1000).toLocaleTimeString()} - ${text}</p>` + div.innerHTML;
 }
 
 // === SCAN FUNCTION ===
