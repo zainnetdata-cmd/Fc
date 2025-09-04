@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ZAIN.NET Crypto Futures – LONG/SHORT Scanner</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  body { background:#111; color:#eee; font-family:Arial; }
+  #chart { height:500px; }
+</style>
+</head>
+<body>
+  <h2>Crypto Futures Scanner</h2>
+  <div id="chart"></div>
+  <div id="signals"></div>
+
+<script>
+// === SETUP CHART ===
+const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+    layout: { background: { color: '#111' }, textColor: '#eee' },
+    grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } }
+});
+const candleSeries = chart.addCandlestickSeries();
+const ema50Series = chart.addLineSeries({ color: 'yellow' });
+const ema200Series = chart.addLineSeries({ color: 'red' });
+const lineSupport = chart.addLineSeries({ color: 'green', lineWidth: 1, lineStyle: 2 });
+const lineResistance = chart.addLineSeries({ color: 'orange', lineWidth: 1, lineStyle: 2 });
+
+// === ALARM SOUND ===
+const alarmSound = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+
+// === FETCH DATA BINANCE ===
+async function fetchData(symbol="BTCUSDT", interval="5m", limit=200) {
+    let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    let res = await fetch(url);
+    let data = await res.json();
+    return data.map(d => ({
+        time: d[0]/1000,
+        open: parseFloat(d[1]),
+        high: parseFloat(d[2]),
+        low: parseFloat(d[3]),
+        close: parseFloat(d[4])
+    }));
+}
+
+// === CALCULATE EMA ===
+function EMA(data, period) {
+    let k = 2/(period+1);
+    let emaArray = [];
+    let ema = data[0].close;
+    data.forEach((bar,i) => {
+        ema = i===0 ? bar.close : bar.close*k + ema*(1-k);
+        emaArray.push({ time: bar.time, value: ema });
+    });
+    return emaArray;
+}
+
+// === CALCULATE RSI ===
+function RSI(data, period=14) {
+    let gains=0, losses=0, rsi=[{time:data[0].time,value:50}];
+    for(let i=1;i<data.length;i++){
+        let change = data[i].close - data[i-1].close;
+        gains += Math.max(0,change);
+        losses += Math.max(0,-change);
+        if(i>=period){
+            let avgGain = gains/period;
+            let avgLoss = losses/period;
+            let rs = avgLoss===0 ? 100 : avgGain/avgLoss;
+            let val = 100-(100/(1+rs));
+            rsi.push({time:data[i].time,value:val});
+            gains -= Math.max(0,data[i-period+1].close - data[i-period].close);
+            losses -= Math.max(0,data[i-period].close - data[i-period+1].close);
+        }
+    }
+    return rsi;
+}
+
+// === ADD MARKER TO CHART ===
+function addMarker(text, type, time){
+    candleSeries.setMarkers([{ 
+        time: time, 
+        position: type==='long'?'belowBar':'aboveBar',
+        color: type==='long'?'green':'red',
+        shape: type==='long'?'arrowUp':'arrowDown',
+        text: text
+    }]);
+    let div = document.getElementById("signals");
+    div.innerHTML += `<p>${new Date(time*1000).toLocaleTimeString()} - ${text}</p>`;
+}
+
+// === SCAN FUNCTION ===
+async function runScan(){
+    let data = await fetchData("BTCUSDT","5m",200);
+    candleSeries.setData(data);
+
+    let ema50 = EMA(data,50);
+    let ema200 = EMA(data,200);
+    ema50Series.setData(ema50);
+    ema200Series.setData(ema200);
+
+    let rsi = RSI(data,14);
+    let last = data[data.length-1];
+    let time = last.time;
+    let ema50Now = ema50[ema50.length-1].value;
+    let ema200Now = ema200[ema200.length-1].value;
+    let ema50Prev = ema50[ema50.length-2].value;
+    let ema200Prev = ema200[ema200.length-2].value;
+    let rsiNow = rsi[rsi.length-1].value;
+
+    // === Golden Cross/Death Cross ===
+    if(ema50Prev < ema200Prev && ema50Now > ema200Now){
+        addMarker("Golden Cross","long",time);
+        alarmSound.play();
+    }
+    if(ema50Prev > ema200Prev && ema50Now < ema200Now){
+        addMarker("Death Cross","short",time);
+        alarmSound.play();
+    }
+
+    // === Golden Fibonacci ===
+    let swingHigh = Math.max(...data.map(d=>d.high));
+    let swingLow = Math.min(...data.map(d=>d.low));
+    let fibo618 = swingLow + (swingHigh-swingLow)*0.618;
+    let fibo786 = swingLow + (swingHigh-swingLow)*0.786;
+    if(Math.abs(last.close-fibo618)/fibo618 < 0.002){
+        addMarker("Golden Fibonacci 0.618","long",time);
+        alarmSound.play();
+    }
+    if(Math.abs(last.close-fibo786)/fibo786 < 0.002){
+        addMarker("Golden Fibonacci 0.786","long",time);
+        alarmSound.play();
+    }
+
+    // === RSI EXTREME ===
+    if(rsiNow > 80){
+        addMarker("RSI Overbought > 80","short",time);
+        alarmSound.play();
+    }
+    if(rsiNow < 20){
+        addMarker("RSI Oversold < 20","long",time);
+        alarmSound.play();
+    }
+
+    // === Breakout/Breakdown Simple (support/resistance) ===
+    let support = swingLow;
+    let resistance = swingHigh;
+    lineSupport.setData([{time:data[0].time,value:support},{time:last.time,value:support}]);
+    lineResistance.setData([{time:data[0].time,value:resistance},{time:last.time,value:resistance}]);
+    if(last.close > resistance){
+        addMarker("Breakout Resistance","long",time);
+    }
+    if(last.close < support){
+        addMarker("Breakdown Support","short",time);
+    }
+}
+
+// === Jalankan pertama kali ===
+runScan();
+
+// === Auto refresh tiap 5 menit ===
+setInterval(runScan, 5*60*1000);
+
+</script>
+</body>
+</html>
